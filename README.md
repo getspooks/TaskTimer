@@ -16,5 +16,5 @@ Sessions are saved to a local JSON file so they persist between runs.
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/<your-username>/task-timer.git
+   git clone https://github.com/getspooks/tasktimer.git
 
