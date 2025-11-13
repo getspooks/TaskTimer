@@ -64,15 +64,48 @@ namespace TaskTimer.Persistence
         public static void SaveSessions(List<TaskSession> sessions)
         {
             // Serialize the list. WriteIndented to make the JSON nicely formatted.
-            var json = JsonSerializer.Serialize(
-                sessions,
-                new JsonSerializerOptions
-                {
-                    WriteIndented = true
-                });
+            var json = JsonSerializer.Serialize(sessions, new JsonSerializerOptions { WriteIndented = true });
+            var tmp = FileName + ".tmp";
+            var bak = FileName + ".bak";
 
-            // Write to disk in one go.
-            File.WriteAllText(FileName, json);
+            //Write to the temp file first
+            File.WriteAllText(tmp, json);
+
+            try
+            {
+                //If the file exists, atomically replace and create/overwrite backup if platform supports it
+                if (File.Exists(FileName))
+                {
+                    File.Replace(tmp, FileName, bak, ignoreMetadataErrors: true);
+                }
+                else //Otherwise, rename the temp save file to the main file name 
+                {
+                    File.Move(tmp, FileName, overwrite: true);
+                }
+            }
+            catch
+            {
+                //Fallback path if Replace fails on some FS
+                try
+                {
+                    if (File.Exists(FileName))
+                        File.Copy(FileName, bak, overwrite: true);
+                }
+                catch { /* best effort */ }
+
+                //Rename the temp save file to the main file name
+                File.Move(tmp, FileName, overwrite: true);
+            }
+            finally
+            {
+                //If the temp file exists
+                if (File.Exists(tmp))
+                {
+                    //delete the temp file
+                    try { File.Delete(tmp); } catch { /* ignore */ }
+                }
+
+            }
         }
     }
 }

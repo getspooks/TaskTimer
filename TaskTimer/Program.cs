@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Linq;
 using TaskTimer.Services;
 
@@ -25,9 +26,10 @@ namespace TaskTimer
         /// Function:   RunMenu
         /// Summary:    Main menu loop: show options, handle input, repeat
         /// Returns:    
-        /// ***************************************************************** ///
+        /// ***************************************************************** /// 
         private static void RunMenu(TaskService service)
         {
+
             while (true)
             {
                 // Program title
@@ -40,8 +42,8 @@ namespace TaskTimer
                 {
                     // Show the current task as well as the time elapsed since the start (from current time)
                     var running = service.CurrentSession;
-                    var elapsed = DateTime.Now - running.StartTime;
-                    Console.WriteLine($"Currently running: {running.TaskName} ({elapsed.TotalMinutes:F1} min)");
+                    var duration = DateTime.UtcNow - service.CurrentSession.StartTime;
+                    Console.WriteLine($"Currently running: {running.TaskName} ({duration.TotalMinutes:F1} min)");
                     Console.WriteLine();
                 }
                 else
@@ -52,11 +54,14 @@ namespace TaskTimer
 
                 // Display menu options
                 Console.WriteLine("1) Start new task");
-                Console.WriteLine("2) Stop current task");
-                Console.WriteLine("3) List all sessions");
-                Console.WriteLine("4) Show summary by task");
-                Console.WriteLine("5) Clear all session data");
-                Console.WriteLine("6) Exit");
+                Console.WriteLine("2) Pause current task");
+                Console.WriteLine("3) Stop current task");
+                Console.WriteLine("4) Resume task");
+                Console.WriteLine("5) List all sessions");
+                Console.WriteLine("6) Show summary by task");
+                Console.WriteLine("7) Clear all session data");
+                Console.WriteLine("8) Export Sessions to CSV");
+                Console.WriteLine("9) Exit");
                 Console.WriteLine();
                 Console.Write("Choose an option: ");
 
@@ -67,25 +72,33 @@ namespace TaskTimer
                 {
                     switch (choice)
                     {
-                        case "1":
+                        case "1": //Start a new task
                             StartNewTask(service);
                             break;
-                        case "2":
+                        case "2": //Pause current task 
+                            PauseTask(service);
+                            break;
+                        case "3": //Stop current task
                             StopTask(service);
                             break;
-                        case "3":
+                        case "4": //Resume task
+                            ResumeTask(service);
+                            break;
+                        case "5": //List all sessions
                             ListSessions(service);
                             break;
-                        case "4":
+                        case "6": //Show summary by task
                             ShowSummary(service);
                             break;
-                        case "5":
+                        case "7": //Clear all session data
                             ClearAllSessions(service);
                             break;
-                        case "6":
-                            // Return exits Main, so the app ends.
+                        case "8": //Export Sessions to CSV
+                            ExportCsv(service);
+                            break;
+                        case "9": //Exit (main)
                             return;
-                        default:
+                        default: //Invalid
                             Console.WriteLine("Invalid choice. Press any key to continue...");
                             Console.ReadKey();
                             break;
@@ -115,10 +128,58 @@ namespace TaskTimer
             Console.Write("Enter task name: ");
             var name = Console.ReadLine() ?? string.Empty;
 
-            //Calls start task from taskservices
-            service.StartTask(name);
-            Console.WriteLine("Task started. Press any key to continue...");
-            Console.ReadKey();
+            //If there is a currently running task -
+            if (service.CurrentSession != null)
+            {
+                //Prompt the user for how they would like to handle this
+                Console.WriteLine();
+                Console.WriteLine($"A task is currently running: '{service.CurrentSession.TaskName}'.");
+                Console.WriteLine("What do you want to do with it?");
+                Console.WriteLine("1) Pause it");
+                Console.WriteLine("2) Stop it");
+                Console.WriteLine("3) Cancel");
+                Console.Write("Choose: ");
+
+                var choice = Console.ReadLine() ?? string.Empty;
+
+                //Cancel the task
+                if (choice == "3")
+                {
+                    Console.WriteLine("Cancelled. Press any key to continue...");
+                    Console.ReadKey();
+                    return;
+                }
+
+                //Proceed based on user input (pause/stop)
+                try
+                {
+                    var action = choice == "1" ? SwitchAction.PauseCurrent : SwitchAction.StopCurrent;
+                    service.SwitchToTask(name, action);  
+                    Console.WriteLine($"Switched to '{name}'. Press any key to continue...");
+                    Console.ReadKey();
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error: {ex.Message}");
+                    Console.ReadKey();
+                    return;
+                }
+            }
+
+            //If nothing is running, start clean
+            try
+            {
+                //Calls start task from taskservices
+                service.StartTask(name);
+                Console.WriteLine("Task started. Press any key to continue...");
+                Console.ReadKey();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error: {ex.Message}");
+                Console.ReadKey();
+            }
         }
 
         /// ***************************************************************** ///
@@ -219,6 +280,149 @@ namespace TaskTimer
             else
             {
                 Console.WriteLine("Cancelled. No data was deleted.");
+            }
+
+            Console.WriteLine("Press any key to continue...");
+            Console.ReadKey();
+        }
+
+        /// ***************************************************************** ///
+        /// Function:   PauseTask
+        /// Summary:    UI handler for pausing a task
+        /// Returns:    
+        /// ***************************************************************** ///
+        private static void PauseTask(TaskService service)
+        {
+            //calls task services to pause the currently running task
+            Console.WriteLine();
+            service.PauseCurrentTask();
+            Console.WriteLine("Task paused. Press any key to continue...");
+            Console.ReadKey();
+        }
+
+        /// ***************************************************************** ///
+        /// Function:   ResumeTask
+        /// Summary:    UI handler for resuming a task
+        /// Returns:    
+        /// ***************************************************************** ///
+        private static void ResumeTask(TaskService service)
+        {
+            Console.WriteLine();
+
+            //Get the list of known distinct task names
+            var names = service.GetResumableTaskNames();
+
+            //If there are no distinct names, state so, and go back to menu
+            if (!names.Any())
+            {
+                Console.WriteLine("No past tasks to resume yet.");
+                Console.WriteLine("Press any key to continue...");
+                Console.ReadKey();
+                return;
+            }
+
+            //Otherwise, for each distinct task name - show tasks which could be resumed with a number value for selection
+            Console.WriteLine("Select a task to resume:");
+            for (int i = 0; i < names.Count; i++)
+            {
+                Console.WriteLine($"{i + 1}) {names[i]}");
+            }
+
+            //Promt the user for the task number
+            Console.WriteLine();
+            Console.Write("Enter number: ");
+            var input = Console.ReadLine() ?? string.Empty;
+
+            //If the number is outside of the given, state so and exit to menu
+            if (!int.TryParse(input, out int index) || index < 1 || index > names.Count)
+            {
+                Console.WriteLine("Invalid selection. Press any key to continue...");
+                Console.ReadKey();
+                return;
+            }
+
+            //Get the task name based on the number provided 
+            var taskName = names[index - 1];
+
+            //If there is a currently running task -
+            if (service.CurrentSession != null)
+            {
+                //Prompt the user for how they would like to handle this
+                Console.WriteLine();
+                Console.WriteLine($"A task is currently running: '{service.CurrentSession.TaskName}'.");
+                Console.WriteLine("What do you want to do with the current task?");
+                Console.WriteLine("1) Pause it");
+                Console.WriteLine("2) Stop it");
+                Console.WriteLine("3) Cancel");
+                Console.Write("Choose: ");
+                var choice = Console.ReadLine() ?? string.Empty;
+
+                //Cancel the action
+                if (choice == "3")
+                {
+                    Console.WriteLine("Cancelled. Press any key to continue...");
+                    Console.ReadKey();
+                    return;
+                }
+
+                //If the user selects pause, then pause the current running task - Otherwise, stop the task
+                try
+                {
+                    var action = choice == "1" ? SwitchAction.PauseCurrent : SwitchAction.StopCurrent;
+                    service.SwitchToTask(taskName, action);
+                    Console.WriteLine($"Switched to '{taskName}'. Press any key to continue...");
+                    Console.ReadKey();
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error: {ex.Message}");
+                    Console.WriteLine("Press any key to continue...");
+                    Console.ReadKey();
+                    return;
+                }
+            }
+            else
+            {
+                service.ResumeTask(taskName);
+            }
+
+            Console.WriteLine($"Now running: {service.CurrentSession?.TaskName}");
+            Console.WriteLine("Press any key to continue...");
+            Console.ReadKey();
+        }
+
+        /// ***************************************************************** ///
+        /// Function:   ExportCsv
+        /// Summary:    UI handler for exporting to CSV
+        /// Returns:    
+        /// ***************************************************************** ///
+        private static void ExportCsv(TaskService service)
+        {
+            //Create the file and export to a dedicated folder
+            var dir = Path.Combine(Environment.CurrentDirectory, "Exports");
+            Directory.CreateDirectory(dir); // auto-creates folder if missing
+            var result = service.ExportCsv(dir);
+
+            // Run the export logic in task service
+            var path = service.ExportCsv(dir);
+
+            Console.WriteLine();
+            Console.WriteLine("Export successful!");
+            Console.WriteLine($"File saved to: {path}");
+
+            // Autoopen the CSV file
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo()
+                {
+                    FileName = path,
+                    UseShellExecute = true
+                });
+            }
+            catch
+            {
+                // Ignore if user doesn't have Excel or file associations
             }
 
             Console.WriteLine("Press any key to continue...");
