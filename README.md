@@ -1,7 +1,7 @@
 # Task Timer (C# Console App)
 
 A simple console-based task timer written in C#.  
-Start and stop named tasks, view all recorded sessions, see total time per task, and clear all data.  
+Start and stop named tasks, view all recorded sessions, see total time per task, export session data to CSV and clear all data.  
 Sessions are saved to a local JSON file so they persist between runs.
 
 ## Features
