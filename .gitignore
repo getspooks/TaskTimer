@@ -361,3 +361,9 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# Local runtime and session data
+tasksessions.json
+tasksessions.json.bak
+*.tmp
+*.log
