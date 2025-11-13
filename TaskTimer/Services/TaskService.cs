@@ -129,17 +129,28 @@ namespace TaskTimer.Services
         /// Summary:    Returns a dictionary that maps each TaskName to total time spent
         /// Returns:    Dictionary
         /// ***************************************************************** ///
-        public Dictionary<string, TimeSpan> GetSummaryByTask()
+        public Dictionary<string, TimeSpan> GetSummaryByTask(bool includeRunning = true)
         {
+            //Get the current timr in UTC
+            var now = DateTime.UtcNow;
+
             // Filter sessions that have a duration, group by TaskName, and for each group, sum the minutes
             return _sessions
-                .Where(s => s.Duration.HasValue)
-                .GroupBy(s => s.TaskName)
-                .ToDictionary(
-                    g => g.Key, // task name (e.g., "Study")
-                    g => TimeSpan.FromMinutes(
-                        Math.Round(g.Sum(s => s.Duration!.Value.TotalMinutes)))
-                );
+                   .GroupBy(s => s.TaskName, StringComparer.OrdinalIgnoreCase)
+                   .ToDictionary(
+                       g => g.Key,
+                       g =>
+                       {
+                           double minutes = 0;
+                           foreach (var s in g)
+                           {
+                               DateTime? end = s.EndTime ?? (includeRunning ? now : (DateTime?)null);
+                               if (end == null) continue;
+                               var span = end.Value - s.StartTime;   // StartTime stored in UTC
+                               if (span.TotalMinutes > 0) minutes += span.TotalMinutes;
+                           }
+                           return TimeSpan.FromMinutes(minutes);
+                       });
         }
 
         /// ***************************************************************** ///

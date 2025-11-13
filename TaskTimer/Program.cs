@@ -236,19 +236,18 @@ namespace TaskTimer
         {
             //calls task services to get summary
             Console.WriteLine();
-            var summary = service.GetSummaryByTask();
+
+            var summary = service.GetSummaryByTask(includeRunning: true);
 
             // If there is a summary, say so - Otherwise print the summary
-            if (!summary.Any())
-            {
-                Console.WriteLine("No completed sessions to summarize.");
+            if(!summary.Any())
+    {
+                Console.WriteLine("No sessions to summarize.");
             }
             else
             {
-                foreach (var kvp in summary.OrderByDescending(kvp => kvp.Value))
-                {
-                    Console.WriteLine($"{kvp.Key}: {kvp.Value.TotalMinutes:F1} min ({kvp.Value})");
-                }
+                foreach (var kvp in summary.OrderBy(k => k.Key))
+                    Console.WriteLine($"{kvp.Key}: {kvp.Value.TotalMinutes:F1} min ({kvp.Value:hh\\:mm\\:ss})");
             }
 
             Console.WriteLine();
